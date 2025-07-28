@@ -33,6 +33,24 @@ long long evaluate(string func, long long a, long long b) {
     return -1;
 }
 
+// Safely parse expressions like sum(123, 456)
+bool parseExpression(const string& expr, string& func, long long& a, long long& b) {
+    size_t open = expr.find('(');
+    size_t comma = expr.find(',', open);
+    size_t close = expr.find(')', comma);
+    if (open == string::npos || comma == string::npos || close == string::npos) return false;
+
+    func = expr.substr(0, open);
+
+    try {
+        a = stoll(expr.substr(open + 1, comma - open - 1));
+        b = stoll(expr.substr(comma + 1, close - comma - 1));
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 long long interpolateAtZero(const vector<Share>& shares) {
     long long result = 0;
     for (int i = 0; i < shares.size(); ++i) {
@@ -52,32 +70,28 @@ long long interpolateAtZero(const vector<Share>& shares) {
 }
 
 int main() {
-    ifstream f("input.json");
+    ifstream file("input.json");
     string line;
     vector<Share> shares;
     int id = 0;
 
-    while (getline(f, line)) {
+    while (getline(file, line)) {
         if (line.find("value") != string::npos) {
-            id++;
-            size_t colon = line.find(':');
-            size_t quote1 = line.find('"', colon);
+            size_t quote1 = line.find('"', line.find(":"));
             size_t quote2 = line.find('"', quote1 + 1);
             string expr = line.substr(quote1 + 1, quote2 - quote1 - 1);
 
-            string func = expr.substr(0, expr.find('('));
-            string inside = expr.substr(expr.find('(') + 1, expr.find(')') - expr.find('(') - 1);
-            long long a = stoll(inside.substr(0, inside.find(',')));
-            long long b = stoll(inside.substr(inside.find(',') + 1));
-
-            long long y = evaluate(func, a, b);
-            shares.push_back({id, id, y});
+            string func;
+            long long a, b;
+            if (parseExpression(expr, func, a, b)) {
+                long long y = evaluate(func, a, b);
+                shares.push_back({++id, id, y});
+            }
         }
     }
 
     // Try all combinations of 3 shares
     map<long long, int> freq;
-    vector<vector<int>> usedInWrong;
     for (int i = 0; i < shares.size(); ++i)
         for (int j = i + 1; j < shares.size(); ++j)
             for (int k = j + 1; k < shares.size(); ++k) {
@@ -90,7 +104,7 @@ int main() {
     long long correctSecret = max_element(freq.begin(), freq.end(),
         [](const auto& a, const auto& b) { return a.second < b.second; })->first;
 
-    // Check which share is invalid
+    // Detect invalid shares
     vector<int> possibleInvalids;
     for (auto& s : shares) {
         int count = 0;
@@ -104,7 +118,6 @@ int main() {
         if (count >= 2) possibleInvalids.push_back(s.id);
     }
 
-    // Final output
     ofstream out("output.txt");
     out << "Secret: " << correctSecret << endl;
     out << "Invalid Share IDs: ";
